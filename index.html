@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HydraSpecma · GST B2B vs Purchase Register Validator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --hs-yellow:#FFCC00;
+    --hs-grey:#B3B3B3;
+    --hs-dark:#575757;
+    --hs-yellow-soft:#FFF6D6;
+    --ok:#1e7e34; --ok-bg:#e7f5ec;
+    --bad:#c0392b; --bad-bg:#fdecea;
+    --warn:#b8860b; --warn-bg:#fff6d6;
+    --info:#2c5d8a; --info-bg:#e8f1f8;
+    --line:#e4e4e4;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--hs-dark);background:#f4f4f4;font-size:14px;}
+  header{background:var(--hs-dark);color:#fff;padding:14px 26px;display:flex;align-items:center;gap:18px;border-bottom:5px solid var(--hs-yellow);}
+  header img{height:40px;background:#fff;padding:4px 8px;border-radius:4px;}
+  header .logo-fallback{font-size:22px;font-weight:800;letter-spacing:.5px;color:var(--hs-yellow);display:none;}
+  header h1{font-size:18px;margin:0;font-weight:600;line-height:1.2;}
+  header h1 span{display:block;font-size:12px;font-weight:400;color:var(--hs-grey);margin-top:2px;}
+  .wrap{max-width:1400px;margin:0 auto;padding:22px;}
+  .panel{background:#fff;border:1px solid var(--line);border-radius:8px;padding:20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+  .panel h2{margin:0 0 14px;font-size:15px;color:var(--hs-dark);border-left:4px solid var(--hs-yellow);padding-left:10px;}
+  .uploads{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media(max-width:800px){.uploads{grid-template-columns:1fr}}
+  .drop{border:2px dashed var(--hs-grey);border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:.15s;background:#fafafa;}
+  .drop:hover,.drop.drag{border-color:var(--hs-yellow);background:var(--hs-yellow-soft);}
+  .drop .lbl{font-weight:600;font-size:13px;margin-bottom:6px;}
+  .drop .sub{font-size:12px;color:#888;}
+  .drop .fname{margin-top:10px;font-size:12px;font-weight:600;color:var(--hs-dark);word-break:break-all;}
+  .drop.loaded{border-color:var(--ok);background:var(--ok-bg);}
+  .badge{display:inline-block;background:var(--hs-dark);color:#fff;font-size:10px;padding:2px 7px;border-radius:10px;margin-left:6px;vertical-align:middle;}
+  .opts{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end;margin-top:16px;}
+  .opt label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#888;margin-bottom:4px;font-weight:600;}
+  select,input[type=number]{padding:8px 10px;border:1px solid var(--hs-grey);border-radius:5px;font-size:13px;color:var(--hs-dark);background:#fff;min-width:170px;}
+  .btn{background:var(--hs-yellow);color:var(--hs-dark);border:none;padding:11px 26px;font-size:14px;font-weight:700;border-radius:6px;cursor:pointer;transition:.15s;}
+  .btn:hover{background:#e6b800;}
+  .btn:disabled{background:var(--hs-grey);cursor:not-allowed;color:#fff;}
+  .btn.ghost{background:#fff;border:1px solid var(--hs-dark);}
+  .btn.ghost:hover{background:var(--hs-dark);color:#fff;}
+  .cards{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;}
+  @media(max-width:1100px){.cards{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:600px){.cards{grid-template-columns:repeat(2,1fr)}}
+  .card{border:1px solid var(--line);border-radius:8px;padding:14px;text-align:center;background:#fff;cursor:pointer;transition:.12s;border-top:4px solid var(--hs-grey);}
+  .card:hover{transform:translateY(-2px);box-shadow:0 3px 10px rgba(0,0,0,.08);}
+  .card.active{box-shadow:0 0 0 2px var(--hs-yellow);}
+  .card .num{font-size:26px;font-weight:800;line-height:1;}
+  .card .lbl{font-size:11px;color:#777;margin-top:6px;text-transform:uppercase;letter-spacing:.3px;line-height:1.3;}
+  .card.c-all{border-top-color:var(--hs-dark)}
+  .card.c-pass{border-top-color:var(--ok)} .card.c-pass .num{color:var(--ok)}
+  .card.c-val{border-top-color:var(--bad)} .card.c-val .num{color:var(--bad)}
+  .card.c-date{border-top-color:var(--warn)} .card.c-date .num{color:var(--warn)}
+  .card.c-miss{border-top-color:var(--info)} .card.c-miss .num{color:var(--info)}
+  .card.c-extra{border-top-color:var(--hs-grey)} .card.c-extra .num{color:#777}
+  .toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .search{padding:9px 12px;border:1px solid var(--hs-grey);border-radius:6px;font-size:13px;min-width:260px;}
+  .tbl-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:8px;}
+  table{border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap;}
+  th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;}
+  thead th{position:sticky;top:0;background:var(--hs-dark);color:#fff;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.3px;z-index:2;}
+  thead th.grp-b2b{background:#4a4a4a;} thead th.grp-pr{background:#6a6a6a;}
+  tbody tr:hover{background:var(--hs-yellow-soft);}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;}
+  .status{font-weight:700;padding:3px 8px;border-radius:4px;font-size:11px;display:inline-block;}
+  .s-pass{background:var(--ok-bg);color:var(--ok);}
+  .s-val{background:var(--bad-bg);color:var(--bad);}
+  .s-date{background:var(--warn-bg);color:var(--warn);}
+  .s-miss{background:var(--info-bg);color:var(--info);}
+  .s-extra{background:#eee;color:#777;}
+  .flag-ok{color:var(--ok);font-weight:700;} .flag-bad{color:var(--bad);font-weight:700;}
+  .diff{font-size:10px;color:var(--bad);display:block;}
+  .merged{background:var(--hs-yellow);color:var(--hs-dark);font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;margin-left:4px;}
+  .muted{color:#999;}
+  .empty{padding:40px;text-align:center;color:#999;}
+  .hint{font-size:12px;color:#888;margin-top:8px;line-height:1.5;}
+  footer{text-align:center;color:#999;font-size:11px;padding:16px;}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:11px;margin-top:10px;color:#777;}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block;}
+</style>
+</head>
+<body>
+<header>
+  <img src="https://www.hydraspecma.com/resources/images/2019/HydraSpecma_Logo@2x.png" alt="HydraSpecma"
+       onerror="this.style.display='none';document.getElementById('lf').style.display='inline';">
+  <span class="logo-fallback" id="lf">HydraSpecma</span>
+  <h1>GST B2B &nbsp;vs&nbsp; Purchase Register Validator<span>Reconcile tax, invoice value &amp; details by invoice number</span></h1>
+</header>
+
+<div class="wrap">
+
+  <div class="panel">
+    <h2>1 · Upload files</h2>
+    <div class="uploads">
+      <div class="drop" id="dropB2B">
+        <div class="lbl">GST B2B / GSTR-2B report</div>
+        <div class="sub">Click or drop the .xlsx here</div>
+        <div class="fname" id="nameB2B"></div>
+        <input type="file" id="fileB2B" accept=".xlsx,.xls" hidden>
+      </div>
+      <div class="drop" id="dropPR">
+        <div class="lbl">Purchase Register</div>
+        <div class="sub">Click or drop the .xlsx here</div>
+        <div class="fname" id="namePR"></div>
+        <input type="file" id="filePR" accept=".xlsx,.xls" hidden>
+      </div>
+    </div>
+
+    <div class="opts">
+      <div class="opt">
+        <label>Match invoices by</label>
+        <select id="matchKey">
+          <option value="inv_date" selected>Invoice No. + Date</option>
+          <option value="inv">Invoice No. only</option>
+          <option value="inv_gstin">Invoice No. + GSTIN</option>
+        </select>
+      </div>
+      <div class="opt">
+        <label>Rounding tolerance (₹)</label>
+        <input type="number" id="tol" value="1" min="0" step="0.01">
+      </div>
+      <div class="opt">
+        <button class="btn" id="runBtn" disabled>Validate</button>
+      </div>
+    </div>
+    <div class="hint">
+      Purchase-register duplicates such as <b>2231</b> and <b>2231.</b> are automatically normalised (trailing dots removed) and their
+      CGST + SGST + IGST are <b>summed together</b> before comparison. A row passes when both <b>total tax</b> and <b>invoice amount</b> match within the tolerance.
+    </div>
+  </div>
+
+  <div class="panel" id="resultsPanel" style="display:none;">
+    <h2>2 · Summary</h2>
+    <div class="cards" id="cards"></div>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--ok)"></i>Matched &amp; validated</span>
+      <span><i class="dot" style="background:var(--bad)"></i>Value mismatch</span>
+      <span><i class="dot" style="background:var(--warn)"></i>Date mismatch</span>
+      <span><i class="dot" style="background:var(--info)"></i>Missing in Purchase Register</span>
+      <span><i class="dot" style="background:var(--hs-grey)"></i>In Purchase Register only</span>
+    </div>
+  </div>
+
+  <div class="panel" id="tablePanel" style="display:none;">
+    <div class="toolbar">
+      <h2 style="margin:0;">3 · Detailed results <span class="badge" id="shownCount"></span></h2>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <input class="search" id="search" placeholder="Search invoice, vendor, GSTIN…">
+        <button class="btn" id="exportBtn">⬇ Export to Excel</button>
+      </div>
+    </div>
+    <div class="tbl-scroll">
+      <table id="tbl">
+        <thead>
+          <tr>
+            <th>Result</th>
+            <th>Invoice No.</th>
+            <th class="grp-b2b">Vendor (B2B)</th>
+            <th class="grp-b2b">GSTIN B2B</th>
+            <th class="grp-pr">GSTIN PR</th>
+            <th class="grp-b2b">Date B2B</th>
+            <th class="grp-pr">Date PR</th>
+            <th class="grp-b2b num">Taxable B2B</th>
+            <th class="grp-pr num">Taxable PR</th>
+            <th class="grp-b2b num">CGST B2B</th>
+            <th class="grp-pr num">CGST PR</th>
+            <th class="grp-b2b num">SGST B2B</th>
+            <th class="grp-pr num">SGST PR</th>
+            <th class="grp-b2b num">IGST B2B</th>
+            <th class="grp-pr num">IGST PR</th>
+            <th class="grp-b2b num">Total Tax B2B</th>
+            <th class="grp-pr num">Total Tax PR</th>
+            <th class="num">Tax ✓</th>
+            <th class="grp-b2b num">Inv Amt B2B</th>
+            <th class="grp-pr num">Inv Amt PR</th>
+            <th class="num">Amt ✓</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="emptyMsg" style="display:none;">No rows match your filter.</div>
+  </div>
+
+</div>
+<footer>HydraSpecma · GST reconciliation tool · runs entirely in your browser — no data leaves your computer.</footer>
+
+<script>
+/* ---------------- state ---------------- */
+let dataB2B=null, dataPR=null, results=[], activeFilter='all';
+
+/* ---------------- helpers ---------------- */
+const normHeader = s => String(s==null?'':s).toLowerCase().replace(/[^a-z0-9]/g,'');
+const num = v => { if(v==null||v==='')return 0; const n=parseFloat(String(v).replace(/,/g,'').trim()); return isNaN(n)?0:n; };
+function normInv(v){
+  if(v==null) return '';
+  let s=String(v).trim();
+  if(!s||s.toLowerCase()==='nan') return '';
+  s=s.replace(/[.\s]+$/,'').trim();      // strip trailing dots & spaces (handles 2231. and 2231..)
+  s=s.replace(/\s+/g,' ');
+  return s.toUpperCase();
+}
+function normDate(v){
+  if(v==null||v==='') return '';
+  if(v instanceof Date && !isNaN(v)) return v.toISOString().slice(0,10);
+  if(typeof v==='number' && v>20000 && v<80000){ // excel serial
+    const d=new Date(Date.UTC(1899,11,30)+v*86400000); return d.toISOString().slice(0,10);
+  }
+  let s=String(v).trim();
+  let m=s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})/); // DD-MM-YYYY / DD/MM/YYYY
+  if(m){ let[,d,mo,y]=m; if(y.length===2)y='20'+y; return `${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`; }
+  m=s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/); // YYYY-MM-DD
+  if(m){ let[,y,mo,d]=m; return `${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`; }
+  return s;
+}
+const fmt = n => (n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const dispDate = d => { if(!d) return ''; const m=d.match(/^(\d{4})-(\d{2})-(\d{2})$/); return m?`${m[3]}-${m[2]}-${m[1]}`:d; };
+
+/* alias map: normalized header -> internal field */
+const ALIAS={
+  gstinofsupplier:'gstin', tradelegalname:'vendor', taxablevalue:'taxable',
+  integratedtax:'igst', centraltax:'cgst', stateuttax:'sgst', cess:'cess',
+  invoicenumber:'invoice', invoicedate:'date', invoicevalue:'ivalue', invoicetype:'itype',
+  documentnumber:'invoice', documentdate:'date', totaltax:'ttax', documenttype:'dtype'
+};
+
+/* parse a workbook: find header row on any sheet, return {type, rows[]} */
+function parseFile(wb){
+  for(const sheetName of wb.SheetNames){
+    const arr=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,raw:true,defval:null,blankrows:false});
+    for(let r=0;r<Math.min(arr.length,25);r++){
+      const norm=(arr[r]||[]).map(normHeader);
+      const hasGstin=norm.includes('gstinofsupplier');
+      const isB2B=norm.includes('invoicenumber')&&hasGstin;
+      const isPR =norm.includes('documentnumber')&&hasGstin;
+      if(isB2B||isPR){
+        const cols={};
+        norm.forEach((h,i)=>{ if(ALIAS[h]!==undefined && cols[ALIAS[h]]===undefined) cols[ALIAS[h]]=i; });
+        const rows=[];
+        for(let k=r+1;k<arr.length;k++){
+          const row=arr[k]; if(!row) continue;
+          const inv=row[cols.invoice];
+          if(inv==null||String(inv).trim()==='') continue;
+          rows.push({
+            gstin:String(row[cols.gstin]??'').trim(),
+            vendor:String(row[cols.vendor]??'').trim(),
+            invoiceRaw:String(inv),
+            invoice:normInv(inv),
+            date:normDate(row[cols.date]),
+            taxable:num(row[cols.taxable]),
+            igst:num(row[cols.igst]), cgst:num(row[cols.cgst]), sgst:num(row[cols.sgst]),
+            cess:num(row[cols.cess]),
+            ttax:num(row[cols.ttax]),
+            ivalue:num(row[cols.ivalue])
+          });
+        }
+        return {type:isB2B?'B2B':'PR', sheet:sheetName, rows};
+      }
+    }
+  }
+  return null;
+}
+
+/* group rows by chosen key, summing amounts */
+function groupRows(rows,keyMode){
+  const g={};
+  for(const r of rows){
+    let key = keyMode==='inv' ? r.invoice
+            : keyMode==='inv_gstin' ? r.invoice+'||'+r.gstin
+            : r.invoice+'||'+r.date;   // inv_date
+    if(!g[key]) g[key]={key,invoice:r.invoice,invoiceRaws:new Set(),date:r.date,gstin:r.gstin,vendor:r.vendor,
+                        taxable:0,igst:0,cgst:0,sgst:0,cess:0,ttax:0,ivalue:0,n:0,dates:new Set()};
+    const x=g[key];
+    x.invoiceRaws.add(r.invoiceRaw); x.dates.add(r.date);
+    x.taxable+=r.taxable; x.igst+=r.igst; x.cgst+=r.cgst; x.sgst+=r.sgst; x.cess+=r.cess;
+    x.ttax+=r.ttax; x.ivalue+=r.ivalue; x.n++;
+    if(!x.gstin) x.gstin=r.gstin; if(!x.vendor) x.vendor=r.vendor; if(!x.date) x.date=r.date;
+  }
+  return g;
+}
+
+/* ---------------- core validation ---------------- */
+function validate(){
+  const keyMode=document.getElementById('matchKey').value;
+  const tol=num(document.getElementById('tol').value);
+  const B=groupRows(dataB2B.rows,keyMode);
+  const P=groupRows(dataPR.rows,keyMode);
+  const out=[];
+  const usedP=new Set();
+
+  // primary pass over keys
+  const allKeys=new Set([...Object.keys(B),...Object.keys(P)]);
+  for(const k of allKeys){
+    const b=B[k], p=P[k];
+    if(b&&p){ usedP.add(k); out.push(buildRow(b,p,tol,'matched')); }
+  }
+  // leftovers
+  const leftB=Object.keys(B).filter(k=>!P[k]);
+  const leftP=Object.keys(P).filter(k=>!B[k]);
+
+  // secondary pass: same invoice, different date (only when date is part of key)
+  const matchedP=new Set();
+  if(keyMode==='inv_date'){
+    const pByInv={};
+    leftP.forEach(k=>{ const inv=P[k].invoice; (pByInv[inv]=pByInv[inv]||[]).push(k); });
+    for(const k of leftB){
+      const b=B[k]; const cands=pByInv[b.invoice];
+      if(cands&&cands.length){
+        // only pair as a date-mismatch when the GSTIN also agrees, so a shared
+        // invoice number across two different vendors is NOT falsely linked
+        let pick=cands.find(c=>P[c].gstin && b.gstin && P[c].gstin.toUpperCase()===b.gstin.toUpperCase());
+        if(pick && !matchedP.has(pick)){
+          matchedP.add(pick);
+          out.push(buildRow(b,P[pick],tol,'datemismatch'));
+          b._paired=true;
+        }
+      }
+    }
+  }
+  // remaining B2B-only
+  for(const k of leftB){ if(!B[k]._paired) out.push(buildRow(B[k],null,tol,'missingPR')); }
+  // remaining PR-only
+  for(const k of leftP){ if(!matchedP.has(k)) out.push(buildRow(null,P[k],tol,'extraPR')); }
+
+  results=out;
+  render();
+}
+
+function buildRow(b,p,tol,kind){
+  const bTax = b? b.igst+b.cgst+b.sgst : null;
+  const pTax = p? p.igst+p.cgst+p.sgst : null;
+  const bAmt = b? (b.ivalue||(b.taxable+bTax+b.cess)) : null;
+  const pAmt = p? (p.taxable+pTax+p.cess) : null;
+  const taxMatch = (b&&p)? Math.abs(bTax-pTax)<=tol : null;
+  const amtMatch = (b&&p)? Math.abs(bAmt-pAmt)<=tol : null;
+  const dateMatch = (b&&p)? (b.date===p.date) : null;
+  const gstinMatch= (b&&p)? (String(b.gstin).toUpperCase()===String(p.gstin).toUpperCase()) : null;
+
+  let status;
+  if(kind==='missingPR') status='miss';
+  else if(kind==='extraPR') status='extra';
+  else if(kind==='datemismatch') status='date';
+  else status = (taxMatch&&amtMatch) ? 'pass' : 'val';
+  // if primary matched but the date field itself disagrees (possible under inv/inv_gstin key), still flag visually via dateMatch
+
+  return {
+    status, kind,
+    invoice: (b&&b.invoice)||(p&&p.invoice)||'',
+    invoiceRawsB: b?[...b.invoiceRaws].join(' | '):'',
+    invoiceRawsP: p?[...p.invoiceRaws].join(' | '):'',
+    mergedP: p? p.n : 0,
+    vendorB: b?b.vendor:'', vendorP:p?p.vendor:'',
+    gstinB: b?b.gstin:'', gstinP:p?p.gstin:'', gstinMatch,
+    dateB: b?b.date:'', dateP:p?p.date:'', dateMatch,
+    taxableB: b?b.taxable:null, taxableP:p?p.taxable:null,
+    cgstB:b?b.cgst:null,cgstP:p?p.cgst:null,
+    sgstB:b?b.sgst:null,sgstP:p?p.sgst:null,
+    igstB:b?b.igst:null,igstP:p?p.igst:null,
+    totTaxB:bTax, totTaxP:pTax, taxMatch, taxDiff:(b&&p)?(bTax-pTax):null,
+    amtB:bAmt, amtP:pAmt, amtMatch, amtDiff:(b&&p)?(bAmt-pAmt):null
+  };
+}
+
+/* ---------------- render ---------------- */
+const CARDS=[
+  ['all','All',      'c-all'],
+  ['pass','Matched & Validated','c-pass'],
+  ['val','Value Mismatch','c-val'],
+  ['date','Date Mismatch','c-date'],
+  ['miss','Missing in Purchase Reg.','c-miss'],
+  ['extra','In Purchase Reg. only','c-extra']
+];
+function counts(){
+  const c={all:results.length,pass:0,val:0,date:0,miss:0,extra:0};
+  results.forEach(r=>c[r.status]++);
+  return c;
+}
+function render(){
+  document.getElementById('resultsPanel').style.display='block';
+  document.getElementById('tablePanel').style.display='block';
+  const c=counts();
+  document.getElementById('cards').innerHTML=CARDS.map(([k,l,cls])=>
+    `<div class="card ${cls} ${activeFilter===k?'active':''}" data-f="${k}">
+       <div class="num">${c[k]}</div><div class="lbl">${l}</div></div>`).join('');
+  document.querySelectorAll('.card').forEach(el=>el.onclick=()=>{activeFilter=el.dataset.f;render();});
+  renderTable();
+}
+function renderTable(){
+  const q=document.getElementById('search').value.trim().toLowerCase();
+  let rows=results.filter(r=>activeFilter==='all'||r.status===activeFilter);
+  if(q) rows=rows.filter(r=>(r.invoice+' '+r.vendorB+' '+r.vendorP+' '+r.gstinB+' '+r.gstinP+' '+r.invoiceRawsP).toLowerCase().includes(q));
+  const sc={pass:0,val:1,date:2,miss:3,extra:4};
+  rows.sort((a,b)=>(sc[a.status]-sc[b.status])||a.invoice.localeCompare(b.invoice));
+  const tb=document.getElementById('tbody');
+  const ST={pass:['s-pass','MATCHED ✓'],val:['s-val','VALUE MISMATCH'],date:['s-date','DATE MISMATCH'],miss:['s-miss','MISSING IN PR'],extra:['s-extra','PR ONLY']};
+  tb.innerHTML=rows.map(r=>{
+    const merged = r.mergedP>1?`<span class="merged" title="${r.invoiceRawsP}">${r.mergedP}×</span>`:'';
+    const cell=(v)=> v==null?'<span class="muted">—</span>':fmt(v);
+    const taxFlag = r.taxMatch==null?'<span class="muted">—</span>':(r.taxMatch?'<span class="flag-ok">✓</span>':`<span class="flag-bad">✗</span><span class="diff">Δ${fmt(r.taxDiff)}</span>`);
+    const amtFlag = r.amtMatch==null?'<span class="muted">—</span>':(r.amtMatch?'<span class="flag-ok">✓</span>':`<span class="flag-bad">✗</span><span class="diff">Δ${fmt(r.amtDiff)}</span>`);
+    const gstinCls = r.gstinMatch===false?'flag-bad':'';
+    const dateClsB = (r.dateMatch===false)?'flag-bad':'';
+    return `<tr>
+      <td><span class="status ${ST[r.status][0]}">${ST[r.status][1]}</span></td>
+      <td><b>${r.invoice||'—'}</b>${merged}</td>
+      <td>${r.vendorB||r.vendorP||'<span class=muted>—</span>'}</td>
+      <td class="${gstinCls}">${r.gstinB||'<span class=muted>—</span>'}</td>
+      <td class="${gstinCls}">${r.gstinP||'<span class=muted>—</span>'}</td>
+      <td class="${dateClsB}">${dispDate(r.dateB)||'<span class=muted>—</span>'}</td>
+      <td class="${dateClsB}">${dispDate(r.dateP)||'<span class=muted>—</span>'}</td>
+      <td class="num">${cell(r.taxableB)}</td><td class="num">${cell(r.taxableP)}</td>
+      <td class="num">${cell(r.cgstB)}</td><td class="num">${cell(r.cgstP)}</td>
+      <td class="num">${cell(r.sgstB)}</td><td class="num">${cell(r.sgstP)}</td>
+      <td class="num">${cell(r.igstB)}</td><td class="num">${cell(r.igstP)}</td>
+      <td class="num"><b>${cell(r.totTaxB)}</b></td><td class="num"><b>${cell(r.totTaxP)}</b></td>
+      <td class="num">${taxFlag}</td>
+      <td class="num">${cell(r.amtB)}</td><td class="num">${cell(r.amtP)}</td>
+      <td class="num">${amtFlag}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('shownCount').textContent=rows.length+' shown';
+  document.getElementById('emptyMsg').style.display=rows.length?'none':'block';
+}
+
+/* ---------------- export ---------------- */
+function exportXlsx(){
+  const head=['Validation Result','Invoice No.','PR raw invoice(s)','PR lines merged',
+    'Vendor (B2B)','Vendor (PR)','GSTIN (B2B)','GSTIN (PR)','GSTIN match',
+    'Date (B2B)','Date (PR)','Date match',
+    'Taxable (B2B)','Taxable (PR)','CGST (B2B)','CGST (PR)','SGST (B2B)','SGST (PR)','IGST (B2B)','IGST (PR)',
+    'Total Tax (B2B)','Total Tax (PR)','Tax match','Tax diff',
+    'Invoice Amt (B2B)','Invoice Amt (PR)','Amount match','Amount diff'];
+  const LBL={pass:'MATCHED & VALIDATED',val:'VALUE MISMATCH',date:'DATE MISMATCH',miss:'MISSING IN PURCHASE REGISTER',extra:'IN PURCHASE REGISTER ONLY'};
+  const yn=b=> b==null?'':(b?'YES':'NO');
+  const aoa=[head];
+  results.forEach(r=>aoa.push([
+    LBL[r.status],r.invoice,r.invoiceRawsP,r.mergedP||'',
+    r.vendorB,r.vendorP,r.gstinB,r.gstinP,yn(r.gstinMatch),
+    dispDate(r.dateB),dispDate(r.dateP),yn(r.dateMatch),
+    r.taxableB,r.taxableP,r.cgstB,r.cgstP,r.sgstB,r.sgstP,r.igstB,r.igstP,
+    r.totTaxB,r.totTaxP,yn(r.taxMatch),r.taxDiff,
+    r.amtB,r.amtP,yn(r.amtMatch),r.amtDiff
+  ]));
+  const c=counts();
+  const summary=[['HydraSpecma · GST B2B vs Purchase Register — Validation Summary'],[],
+    ['Generated',new Date().toLocaleString('en-IN')],
+    ['Match key',document.getElementById('matchKey').selectedOptions[0].text],
+    ['Tolerance (₹)',num(document.getElementById('tol').value)],[],
+    ['Total invoices compared',c.all],
+    ['Matched & validated',c.pass],
+    ['Value mismatch',c.val],
+    ['Date mismatch',c.date],
+    ['Missing in Purchase Register',c.miss],
+    ['In Purchase Register only',c.extra]];
+  const wb=XLSX.utils.book_new();
+  const ws1=XLSX.utils.aoa_to_sheet(summary);
+  const ws2=XLSX.utils.aoa_to_sheet(aoa);
+  ws2['!cols']=head.map((h,i)=>({wch:i<2?22:14}));
+  XLSX.utils.book_append_sheet(wb,ws1,'Summary');
+  XLSX.utils.book_append_sheet(wb,ws2,'Validation Detail');
+  XLSX.writeFile(wb,'HydraSpecma_GST_Validation_'+new Date().toISOString().slice(0,10)+'.xlsx');
+}
+
+/* ---------------- file wiring ---------------- */
+function wireDrop(dropId,inputId,nameId,slot){
+  const drop=document.getElementById(dropId),input=document.getElementById(inputId),name=document.getElementById(nameId);
+  drop.onclick=()=>input.click();
+  ['dragover','dragenter'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('drag');}));
+  ['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('drag');}));
+  drop.addEventListener('drop',ev=>{ if(ev.dataTransfer.files.length) handleFile(ev.dataTransfer.files[0],name,drop,slot); });
+  input.addEventListener('change',()=>{ if(input.files.length) handleFile(input.files[0],name,drop,slot); });
+}
+function handleFile(file,nameEl,dropEl,slot){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
+      const parsed=parseFile(wb);
+      if(!parsed){ alert('Could not find a GST B2B or Purchase Register header in "'+file.name+'". Please check the file.'); return; }
+      // auto-route to correct slot by detected type
+      if(parsed.type==='B2B') dataB2B=parsed; else dataPR=parsed;
+      nameEl.innerHTML=file.name+` <span class="badge">${parsed.type} · ${parsed.rows.length} rows</span>`;
+      dropEl.classList.add('loaded');
+      document.getElementById('runBtn').disabled=!(dataB2B&&dataPR);
+    }catch(err){ alert('Error reading file: '+err.message); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+wireDrop('dropB2B','fileB2B','nameB2B','B2B');
+wireDrop('dropPR','filePR','namePR','PR');
+document.getElementById('runBtn').onclick=validate;
+document.getElementById('exportBtn').onclick=exportXlsx;
+document.getElementById('search').addEventListener('input',renderTable);
+document.getElementById('matchKey').addEventListener('change',()=>{ if(results.length) validate(); });
+document.getElementById('tol').addEventListener('change',()=>{ if(results.length) validate(); });
+</script>
+</body>
+</html>
