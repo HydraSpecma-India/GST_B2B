@@ -189,7 +189,7 @@
   </div>
 
 </div>
-<footer>HydraSpecma · GST reconciliation tool · runs entirely in your browser — no data leaves your computer.</footer>
+<footer>HydraSpecma · GST reconciliation tool · runs entirely in your browser — no data leaves your computer.<br><b>Developed by Manigandan Parthasarathi</b></footer>
 
 <script>
 /* ---------------- state ---------------- */
@@ -457,7 +457,8 @@ function exportXlsx(){
     ['Value mismatch',c.val],
     ['Date mismatch',c.date],
     ['Missing in Purchase Register',c.miss],
-    ['In Purchase Register only',c.extra]];
+    ['In Purchase Register only',c.extra],[],
+    ['Developed by','Manigandan Parthasarathi']];
   const wb=XLSX.utils.book_new();
   const ws1=XLSX.utils.aoa_to_sheet(summary);
   const ws2=XLSX.utils.aoa_to_sheet(aoa);
