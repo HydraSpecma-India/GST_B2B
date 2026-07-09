@@ -62,7 +62,7 @@
   .search{padding:9px 12px;border:1px solid var(--hs-grey);border-radius:6px;font-size:13px;min-width:260px;}
   .tbl-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:8px;}
   table{border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap;}
-  th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;}
+  th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;}
   thead th{position:sticky;top:0;background:var(--hs-dark);color:#fff;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.3px;z-index:2;}
   thead th.grp-b2b{background:#4a4a4a;} thead th.grp-pr{background:#6a6a6a;}
   tbody tr:hover{background:var(--hs-yellow-soft);}
@@ -76,10 +76,12 @@
   .flag-ok{color:var(--ok);font-weight:700;} .flag-bad{color:var(--bad);font-weight:700;}
   .diff{font-size:10px;color:var(--bad);display:block;}
   .merged{background:var(--hs-yellow);color:var(--hs-dark);font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;margin-left:4px;}
+  .prlist{font-size:11px;line-height:1.5;}
+  .prlist .idx{color:#b8860b;font-weight:700;}
   .muted{color:#999;}
   .empty{padding:40px;text-align:center;color:#999;}
   .hint{font-size:12px;color:#888;margin-top:8px;line-height:1.5;}
-  footer{text-align:center;color:#999;font-size:11px;padding:16px;}
+  footer{text-align:center;color:#999;font-size:11px;padding:16px;line-height:1.7;}
   .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:11px;margin-top:10px;color:#777;}
   .legend span{display:inline-flex;align-items:center;gap:5px;}
   .dot{width:10px;height:10px;border-radius:50%;display:inline-block;}
@@ -131,7 +133,8 @@
     </div>
     <div class="hint">
       Purchase-register duplicates such as <b>2231</b> and <b>2231.</b> are automatically normalised (trailing dots removed) and their
-      CGST + SGST + IGST are <b>summed together</b> before comparison. A row passes when both <b>total tax</b> and <b>invoice amount</b> match within the tolerance.
+      CGST + SGST + IGST are <b>summed together</b> before comparison. The individual invoice numbers that were merged are listed
+      (numbered 1, 2, 3…) in the <b>PR Invoice No(s)</b> column. A row passes when both <b>total tax</b> and <b>invoice amount</b> match within the tolerance.
     </div>
   </div>
 
@@ -161,6 +164,7 @@
           <tr>
             <th>Result</th>
             <th>Invoice No.</th>
+            <th class="grp-pr">PR Invoice No(s)</th>
             <th class="grp-b2b">Vendor (B2B)</th>
             <th class="grp-b2b">GSTIN B2B</th>
             <th class="grp-pr">GSTIN PR</th>
@@ -189,7 +193,10 @@
   </div>
 
 </div>
-<footer>HydraSpecma · GST reconciliation tool · runs entirely in your browser — no data leaves your computer.<br><b>Developed by Manigandan Parthasarathi</b></footer>
+<footer>
+  HydraSpecma · GST reconciliation tool · runs entirely in your browser — no data leaves your computer.<br>
+  <b>Developed by Manigandan Parthasarathi</b>
+</footer>
 
 <script>
 /* ---------------- state ---------------- */
@@ -221,6 +228,15 @@ function normDate(v){
 }
 const fmt = n => (n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
 const dispDate = d => { if(!d) return ''; const m=d.match(/^(\d{4})-(\d{2})-(\d{2})$/); return m?`${m[3]}-${m[2]}-${m[1]}`:d; };
+const esc = s => String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+/* list the raw invoice numbers; number them 1. 2. 3. when a group has duplicates */
+function numberList(arr, sep, html){
+  if(!arr||!arr.length) return '';
+  const a=arr.map(x=>String(x).trim()).filter(x=>x!=='');
+  if(a.length<=1) return html?esc(a[0]||''):(a[0]||'');
+  if(html) return a.map((v,i)=>`<span class="idx">${i+1}.</span> ${esc(v)}`).join('<br>');
+  return a.map((v,i)=>(i+1)+'. '+v).join(sep);
+}
 
 /* alias map: normalized header -> internal field */
 const ALIAS={
@@ -248,8 +264,8 @@ function parseFile(wb){
           const inv=row[cols.invoice];
           if(inv==null||String(inv).trim()==='') continue;
           rows.push({
-            gstin:String(row[cols.gstin]??'').trim(),
-            vendor:String(row[cols.vendor]??'').trim(),
+            gstin:String(row[cols.gstin]==null?'':row[cols.gstin]).trim(),
+            vendor:String(row[cols.vendor]==null?'':row[cols.vendor]).trim(),
             invoiceRaw:String(inv),
             invoice:normInv(inv),
             date:normDate(row[cols.date]),
@@ -274,10 +290,10 @@ function groupRows(rows,keyMode){
     let key = keyMode==='inv' ? r.invoice
             : keyMode==='inv_gstin' ? r.invoice+'||'+r.gstin
             : r.invoice+'||'+r.date;   // inv_date
-    if(!g[key]) g[key]={key,invoice:r.invoice,invoiceRaws:new Set(),date:r.date,gstin:r.gstin,vendor:r.vendor,
+    if(!g[key]) g[key]={key,invoice:r.invoice,invoiceRaws:[],date:r.date,gstin:r.gstin,vendor:r.vendor,
                         taxable:0,igst:0,cgst:0,sgst:0,cess:0,ttax:0,ivalue:0,n:0,dates:new Set()};
     const x=g[key];
-    x.invoiceRaws.add(r.invoiceRaw); x.dates.add(r.date);
+    x.invoiceRaws.push(r.invoiceRaw); x.dates.add(r.date);
     x.taxable+=r.taxable; x.igst+=r.igst; x.cgst+=r.cgst; x.sgst+=r.sgst; x.cess+=r.cess;
     x.ttax+=r.ttax; x.ivalue+=r.ivalue; x.n++;
     if(!x.gstin) x.gstin=r.gstin; if(!x.vendor) x.vendor=r.vendor; if(!x.date) x.date=r.date;
@@ -292,13 +308,12 @@ function validate(){
   const B=groupRows(dataB2B.rows,keyMode);
   const P=groupRows(dataPR.rows,keyMode);
   const out=[];
-  const usedP=new Set();
 
-  // primary pass over keys
+  // primary pass over keys present in both
   const allKeys=new Set([...Object.keys(B),...Object.keys(P)]);
   for(const k of allKeys){
     const b=B[k], p=P[k];
-    if(b&&p){ usedP.add(k); out.push(buildRow(b,p,tol,'matched')); }
+    if(b&&p){ out.push(buildRow(b,p,tol,'matched')); }
   }
   // leftovers
   const leftB=Object.keys(B).filter(k=>!P[k]);
@@ -347,13 +362,14 @@ function buildRow(b,p,tol,kind){
   else if(kind==='extraPR') status='extra';
   else if(kind==='datemismatch') status='date';
   else status = (taxMatch&&amtMatch) ? 'pass' : 'val';
-  // if primary matched but the date field itself disagrees (possible under inv/inv_gstin key), still flag visually via dateMatch
 
   return {
     status, kind,
     invoice: (b&&b.invoice)||(p&&p.invoice)||'',
-    invoiceRawsB: b?[...b.invoiceRaws].join(' | '):'',
-    invoiceRawsP: p?[...p.invoiceRaws].join(' | '):'',
+    invoiceRawsB: b?b.invoiceRaws.join(' | '):'',
+    invoiceRawsP: p?p.invoiceRaws.join(' | '):'',
+    rawsP: p?p.invoiceRaws.slice():[],
+    rawsB: b?b.invoiceRaws.slice():[],
     mergedP: p? p.n : 0,
     vendorB: b?b.vendor:'', vendorP:p?p.vendor:'',
     gstinB: b?b.gstin:'', gstinP:p?p.gstin:'', gstinMatch,
@@ -401,6 +417,7 @@ function renderTable(){
   const ST={pass:['s-pass','MATCHED ✓'],val:['s-val','VALUE MISMATCH'],date:['s-date','DATE MISMATCH'],miss:['s-miss','MISSING IN PR'],extra:['s-extra','PR ONLY']};
   tb.innerHTML=rows.map(r=>{
     const merged = r.mergedP>1?`<span class="merged" title="${r.invoiceRawsP}">${r.mergedP}×</span>`:'';
+    const prInv = (r.rawsP&&r.rawsP.length)? `<span class="prlist">${numberList(r.rawsP,'<br>',true)}</span>` : '<span class="muted">—</span>';
     const cell=(v)=> v==null?'<span class="muted">—</span>':fmt(v);
     const taxFlag = r.taxMatch==null?'<span class="muted">—</span>':(r.taxMatch?'<span class="flag-ok">✓</span>':`<span class="flag-bad">✗</span><span class="diff">Δ${fmt(r.taxDiff)}</span>`);
     const amtFlag = r.amtMatch==null?'<span class="muted">—</span>':(r.amtMatch?'<span class="flag-ok">✓</span>':`<span class="flag-bad">✗</span><span class="diff">Δ${fmt(r.amtDiff)}</span>`);
@@ -408,10 +425,11 @@ function renderTable(){
     const dateClsB = (r.dateMatch===false)?'flag-bad':'';
     return `<tr>
       <td><span class="status ${ST[r.status][0]}">${ST[r.status][1]}</span></td>
-      <td><b>${r.invoice||'—'}</b>${merged}</td>
-      <td>${r.vendorB||r.vendorP||'<span class=muted>—</span>'}</td>
-      <td class="${gstinCls}">${r.gstinB||'<span class=muted>—</span>'}</td>
-      <td class="${gstinCls}">${r.gstinP||'<span class=muted>—</span>'}</td>
+      <td><b>${esc(r.invoice)||'—'}</b>${merged}</td>
+      <td>${prInv}</td>
+      <td>${esc(r.vendorB||r.vendorP)||'<span class=muted>—</span>'}</td>
+      <td class="${gstinCls}">${esc(r.gstinB)||'<span class=muted>—</span>'}</td>
+      <td class="${gstinCls}">${esc(r.gstinP)||'<span class=muted>—</span>'}</td>
       <td class="${dateClsB}">${dispDate(r.dateB)||'<span class=muted>—</span>'}</td>
       <td class="${dateClsB}">${dispDate(r.dateP)||'<span class=muted>—</span>'}</td>
       <td class="num">${cell(r.taxableB)}</td><td class="num">${cell(r.taxableP)}</td>
@@ -430,7 +448,7 @@ function renderTable(){
 
 /* ---------------- export ---------------- */
 function exportXlsx(){
-  const head=['Validation Result','Invoice No.','PR raw invoice(s)','PR lines merged',
+  const head=['Validation Result','Invoice No.','PR Invoice No(s)','PR lines merged',
     'Vendor (B2B)','Vendor (PR)','GSTIN (B2B)','GSTIN (PR)','GSTIN match',
     'Date (B2B)','Date (PR)','Date match',
     'Taxable (B2B)','Taxable (PR)','CGST (B2B)','CGST (PR)','SGST (B2B)','SGST (PR)','IGST (B2B)','IGST (PR)',
@@ -440,7 +458,7 @@ function exportXlsx(){
   const yn=b=> b==null?'':(b?'YES':'NO');
   const aoa=[head];
   results.forEach(r=>aoa.push([
-    LBL[r.status],r.invoice,r.invoiceRawsP,r.mergedP||'',
+    LBL[r.status],r.invoice,numberList(r.rawsP,' | ',false),r.mergedP||'',
     r.vendorB,r.vendorP,r.gstinB,r.gstinP,yn(r.gstinMatch),
     dispDate(r.dateB),dispDate(r.dateP),yn(r.dateMatch),
     r.taxableB,r.taxableP,r.cgstB,r.cgstP,r.sgstB,r.sgstP,r.igstB,r.igstP,
@@ -462,7 +480,7 @@ function exportXlsx(){
   const wb=XLSX.utils.book_new();
   const ws1=XLSX.utils.aoa_to_sheet(summary);
   const ws2=XLSX.utils.aoa_to_sheet(aoa);
-  ws2['!cols']=head.map((h,i)=>({wch:i<2?22:14}));
+  ws2['!cols']=head.map((h,i)=>({wch:i<3?22:14}));
   XLSX.utils.book_append_sheet(wb,ws1,'Summary');
   XLSX.utils.book_append_sheet(wb,ws2,'Validation Detail');
   XLSX.writeFile(wb,'HydraSpecma_GST_Validation_'+new Date().toISOString().slice(0,10)+'.xlsx');
@@ -484,8 +502,7 @@ function handleFile(file,nameEl,dropEl,slot){
       const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
       const parsed=parseFile(wb);
       if(!parsed){ alert('Could not find a GST B2B or Purchase Register header in "'+file.name+'". Please check the file.'); return; }
-      // auto-route to correct slot by detected type
-      if(parsed.type==='B2B') dataB2B=parsed; else dataPR=parsed;
+      if(parsed.type==='B2B') dataB2B=parsed; else dataPR=parsed;   // auto-route by detected type
       nameEl.innerHTML=file.name+` <span class="badge">${parsed.type} · ${parsed.rows.length} rows</span>`;
       dropEl.classList.add('loaded');
       document.getElementById('runBtn').disabled=!(dataB2B&&dataPR);
