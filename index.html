@@ -256,8 +256,15 @@ function parseFile(wb){
       const isB2B=norm.includes('invoicenumber')&&hasGstin;
       const isPR =norm.includes('documentnumber')&&hasGstin;
       if(isB2B||isPR){
+        // Some GSTR-2B templates split the header across two rows (e.g. "Taxable Value"
+        // sits on the row above while this row's cell is blank). For any blank header
+        // cell, fall back to the cell directly above so those columns are still mapped.
+        const above=(r>0?arr[r-1]:[])||[];
         const cols={};
-        norm.forEach((h,i)=>{ if(ALIAS[h]!==undefined && cols[ALIAS[h]]===undefined) cols[ALIAS[h]]=i; });
+        norm.forEach((h,i)=>{
+          let key=h || normHeader(above[i]);
+          if(ALIAS[key]!==undefined && cols[ALIAS[key]]===undefined) cols[ALIAS[key]]=i;
+        });
         const rows=[];
         for(let k=r+1;k<arr.length;k++){
           const row=arr[k]; if(!row) continue;
